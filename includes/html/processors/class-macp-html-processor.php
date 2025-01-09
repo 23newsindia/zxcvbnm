@@ -16,36 +16,45 @@ class MACP_HTML_Processor {
     }
 
     public function process($html) {
-    if (empty($html)) {
+    if (empty($html) || !get_option('macp_remove_unused_css', 0)) {
         return $html;
     }
 
-    $should_minify = $this->options['minify_css'];
-    $should_remove_unused = $this->options['remove_unused_css'];
-
-    // Extract CSS links before processing
-    $css_links = [];
-    if ($should_minify || $should_remove_unused) {
-        preg_match_all('/<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i', $html, $matches);
-        if (!empty($matches[0])) {
-            $css_links = array_combine($matches[1], $matches[0]);
-        }
+    // Extract all CSS links
+    preg_match_all('/<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i', $html, $matches);
+    
+    if (empty($matches[0])) {
+        return $html;
     }
 
-    // Process CSS
-    if (!empty($css_links)) {
-        foreach ($css_links as $url => $original_tag) {
-            $processed_css = $this->process_css_file($url, $html);
-            if ($processed_css) {
-                // Create new style tag with processed CSS
-                $new_tag = "<style id=\"" . sanitize_title($url) . "\">" . $processed_css . "</style>";
-                $html = str_replace($original_tag, $new_tag, $html);
+    $optimized_css = '';
+    foreach ($matches[1] as $index => $css_url) {
+        // Skip external fonts and excluded patterns
+        if (strpos($css_url, 'fonts.googleapis.com') !== false) {
+            continue;
+        }
+
+        // Get the optimized CSS from cache
+        $cache_key = md5($css_url);
+        $cache_file = WP_CONTENT_DIR . '/cache/macp/used-css/' . $cache_key . '.css';
+        
+        if (file_exists($cache_file)) {
+            // Read optimized CSS
+            $css_content = file_get_contents($cache_file);
+            if ($css_content !== false) {
+                // Replace the link tag with optimized CSS
+                $html = str_replace(
+                    $matches[0][$index],
+                    "<style id=\"" . sanitize_title($css_url) . "\">\n" . $css_content . "\n</style>",
+                    $html
+                );
             }
         }
     }
 
     return $html;
 }
+
 
 private function process_css_file($url, $html) {
     $css_content = wp_remote_get($url);
