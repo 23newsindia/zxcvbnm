@@ -146,6 +146,19 @@ require_once MACP_PLUGIN_DIR . 'includes/lazy-load/class-macp-lazy-load.php';
 
 require_once MACP_PLUGIN_DIR . 'includes/js/class-macp-script-loader.php';
 
+
+// Initialize CSS optimization if enabled
+if (get_option('macp_remove_unused_css', 0)) {
+    add_action('template_redirect', function() {
+        ob_start(function($html) {
+            $processor = new MACP_HTML_Processor();
+            return $processor->process($html);
+        });
+    }, 1);
+}
+
+
+
 // Include the main plugin class last
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-plugin.php';
 
